@@ -1,61 +1,69 @@
 import struct
-import sys
-from typing import BinaryIO
 
-def read_short(file: BinaryIO) -> int:
-    """Read 2 bytes from the file and return as a short integer."""
-    return struct.unpack(">H", file.read(2))[0]
 
-def read_int(file: BinaryIO) -> int:
-    """Read 4 bytes from the file and return as an integer."""
-    return struct.unpack(">I", file.read(4))[0]
+def read_control_file(filename):
+    with open(filename, "rb") as f:
+        # Read Version
+        version = struct.unpack(">H", f.read(2))[0]
+        print(f"Version: {version}")
 
-def read_long(file: BinaryIO) -> int:
-    """Read 8 bytes from the file and return as a long integer."""
-    return struct.unpack(">Q", file.read(8))[0]
+        # Read EXT (Extension)
+        ext = struct.unpack(">I", f.read(4))[0]
+        print(f"EXT (Extension): {ext}")
 
-def read_bytes(file: BinaryIO, length: int) -> bytes:
-    """Read 'length' bytes from the file."""
-    return file.read(length)
+        # Read Info Hash Length
+        info_hash_length = struct.unpack(">I", f.read(4))[0]
+        print(f"Info Hash Length: {info_hash_length}")
 
-def read_control_file(filename: str) -> None:
-    """
-    Read and parse a binary control file.
+        # Read Info Hash
+        info_hash = f.read(info_hash_length)
+        print(f"Info Hash: {info_hash.hex()}")
 
-    Parameters:
-        filename (str): The name of the file to read.
-    """
-    try:
-        with open(filename, "rb") as f:
-            print(f"Version: {read_short(f)}")
-            print(f"EXT (Extension): {read_int(f)}")
-            info_hash_length = read_int(f)
-            print(f"Info Hash Length: {info_hash_length}")
-            print(f"Info Hash: {read_bytes(f, info_hash_length).hex()}")
-            piece_length = read_int(f)
-            print(f"Piece Length: {piece_length}")
-            print(f"Total Length: {read_long(f)} bytes")
-            print(f"Upload Length: {read_long(f)} bytes")
-            bitfield_length = read_int(f)
-            print(f"Bitfield Length: {bitfield_length}")
-            print(f"Bitfield: {read_bytes(f, bitfield_length).hex()}")
+        # Read Piece Length
+        piece_length = struct.unpack(">I", f.read(4))[0]
+        print(f"Piece Length: {piece_length}")
 
-            # Additional logic (e.g., calculating downloaded bytes) can go here.
+        # Read Total Length
+        total_length = struct.unpack(">Q", f.read(8))[0]
+        print(f"Total Length: {total_length} bytes")
 
-    except FileNotFoundError:
-        print(f"Error: File {filename} not found.")
-    except struct.error:
-        print("Error: Unexpected end of file or unpacking error.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
+        # Read Upload Length
+        upload_length = struct.unpack(">Q", f.read(8))[0]
+        print(f"Upload Length: {upload_length} bytes")
 
-def main() -> None:
-    """Main function to execute the script."""
-    if len(sys.argv) > 1:
-        filename = sys.argv[1]
-        read_control_file(filename)
-    else:
-        print("Usage: python script.py <filename>")
+        # Read Bitfield Length
+        bitfield_length = struct.unpack(">I", f.read(4))[0]
+        print(f"Bitfield Length: {bitfield_length}")
+
+        # Read Bitfield
+        bitfield = f.read(bitfield_length)
+        print(f"Bitfield: {bitfield.hex()}")
+
+        # Calculate downloaded bytes based on bitfield
+        downloaded_bytes = 0
+        for byte in bitfield:
+            for i in range(8):
+                if byte & (1 << i):
+                    downloaded_bytes += piece_length
+
+        print(f"Downloaded Bytes: {downloaded_bytes} bytes")
+
+        # Read Num In-Flight Piece
+        num_in_flight_piece = struct.unpack(">I", f.read(4))[0]
+        print(f"Num In-Flight Piece: {num_in_flight_piece}")
+
+        # Read In-Flight Pieces
+        for _ in range(num_in_flight_piece):
+            index = struct.unpack(">I", f.read(4))[0]
+            length = struct.unpack(">I", f.read(4))[0]
+            piece_bitfield_length = struct.unpack(">I", f.read(4))[0]
+            piece_bitfield = f.read(piece_bitfield_length)
+
+            print(f"In-Flight Piece Index: {index}")
+            print(f"In-Flight Piece Length: {length}")
+            print(f"In-Flight Piece Bitfield Length: {piece_bitfield_length}")
+            print(f"In-Flight Piece Bitfield: {piece_bitfield.hex()}")
+
 
 if __name__ == "__main__":
-    main()
+    read_control_file("download.aria2")
